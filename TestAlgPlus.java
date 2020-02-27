@@ -5,11 +5,20 @@ import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
 
+class WrongDecriptionException extends RuntimeException{
+    public String message;
 
+    WrongDecriptionException(String msg){
+        this.message = msg;
+    }
+
+}
 
 public class TestAlgPlus {
 
@@ -40,10 +49,10 @@ public class TestAlgPlus {
      * @return  list of classes of the file contained in the directory /crypto/algos
      * @throws IOException
      */
-    public List<Class<?>> getListOfAlgos(File cryptoParentFolder) throws IOException {
+    public List<Class<?>> getListOfAlgos(Path cryptoParentFolder) throws IOException {
 
 
-        File algoRoot = new File(cryptoParentFolder.getPath()+"/crypto/algos");
+        File algoRoot = new File(Paths.get(cryptoParentFolder.toString(), "crypto", "algos").toString());
         List<String> listOfNames =  Arrays.stream(algoRoot.listFiles())
                 .map(x->"crypto.algos." + x.getName().replace(".class", ""))
                 .collect(Collectors.toList());
@@ -52,7 +61,7 @@ public class TestAlgPlus {
                 .map(x-> {
                     try {
 
-                        return getClassFromString(x, cryptoParentFolder);
+                        return getClassFromString(x, cryptoParentFolder.toFile());
 
                     } catch (MalformedURLException | ClassNotFoundException e) {
                         e.printStackTrace();
@@ -80,9 +89,9 @@ public class TestAlgPlus {
      * @param cryptoParentFolder Parent folder of crypto
      * @return An object of type KeyRegistry which is a wrapper of an HashMap that contains couples of type <Class, Key>
      */
-    public KeyRegistry getKeyRegistryFromFile(File cryptoParentFolder){
+    public KeyRegistry getKeyRegistryFromFile(Path cryptoParentFolder){
 
-        File keyList = new File(cryptoParentFolder + "/crypto/keys.list");
+        File keyList = new File(Paths.get(cryptoParentFolder.toString(),"crypto","keys.list").toString());
 
         KeyRegistry keyRegistry = new KeyRegistry();
 
@@ -91,7 +100,7 @@ public class TestAlgPlus {
             String[] items = x.split(" ");
             try {
 
-                keyRegistry.add(getClassFromString(items[0], cryptoParentFolder), items[1]);
+                keyRegistry.add(getClassFromString(items[0], cryptoParentFolder.toFile()), items[1]);
 
             } catch (MalformedURLException | ClassNotFoundException e) {
                 e.printStackTrace();
@@ -132,7 +141,7 @@ public class TestAlgPlus {
             d = listOfValidMethods.get(0).invoke(algorithm, e);
         }
         if( !d.toString().replace("#", "").equals(secret))
-            System.out.println("KO: " + secret + " -> " + e + " ->" + d);
+            throw new WrongDecriptionException("KO: " + secret + " -> " + e + " ->" + d);
     }
 
 
@@ -149,7 +158,7 @@ public class TestAlgPlus {
      */
 
     public void checkAlgorithms(String path) throws IOException {
-        File cryptoParentFolder = new File(path);
+        Path cryptoParentFolder = Paths.get(path);
 
         KeyRegistry keyRegistry = getKeyRegistryFromFile(cryptoParentFolder);
 
@@ -181,9 +190,11 @@ public class TestAlgPlus {
                         e.printStackTrace();
                     }
 
+                    System.out.println(x.getName());
+
                     if(constructor != null  && (listOfValidMethodsByName.size() == 2)){
 
-                        File secret = new File(path +"/crypto/secret.list");
+                        File secret = new File(Paths.get(path, "crypto", "secret.list").toString());
 
                         Constructor<?> finalConstructor = constructor;
                         List<Method> finalListOfValidMethods = listOfValidMethodsByName;
@@ -194,6 +205,8 @@ public class TestAlgPlus {
                                         testAlgorithm(finalConstructor, key, finalListOfValidMethods, y);
                                     } catch (IllegalAccessException | InvocationTargetException | InstantiationException e) {
                                         e.printStackTrace();
+                                    } catch (WrongDecriptionException e){
+                                        System.out.println(e.message);
                                     }
                                 });
 
